@@ -1,0 +1,37 @@
+{
+  "name": "hayola-tasks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:db": "node tests/database.mjs",
+    "check": "tsc --noEmit && vitest run && node tests/database.mjs"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "lucide-react": "^0.468.0",
+    "@fontsource-variable/inter": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/node": "^22.0.0",
+    "vite": "^6.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vitest": "^3.0.0",
+    "jsdom": "^26.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "@electric-sql/pglite": "^0.3.0",
+    "prettier": "^3.0.0"
+  }
+}
