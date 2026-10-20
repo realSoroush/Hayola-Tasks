@@ -3,8 +3,8 @@
     -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", sans-serif;
   color-scheme: dark;
   --text: #f5f5f7;
-  --secondary: rgba(235, 235, 245, 0.7);
-  --muted: rgba(235, 235, 245, 0.5);
+  --secondary: rgba(235, 235, 245, 0.82);
+  --muted: rgba(235, 235, 245, 0.72);
   --bg: #232428;
   --glass: rgba(26, 26, 36, 0.42);
   --chrome: rgba(28, 28, 38, 0.36);
@@ -24,8 +24,8 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --text: #0f1017;
-  --secondary: rgba(22, 24, 38, 0.7);
-  --muted: rgba(22, 24, 38, 0.52);
+  --secondary: rgba(22, 24, 38, 0.8);
+  --muted: rgba(22, 24, 38, 0.7);
   --bg: #e4e4e7;
   --glass: rgba(255, 255, 255, 0.32);
   --chrome: rgba(255, 255, 255, 0.4);

@@ -325,7 +325,7 @@ export function Setup() {
 }
 export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
   const { data: d, session, me, save, taskChange, notify } = useStore(),
-    { close, go } = useUI();
+    { close, go, show } = useUI();
   const mode = kind.replace("Form", ""),
     table =
       mode === "task"
@@ -427,6 +427,22 @@ export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
   );
   const formId = useId(),
     [formBusy, setFormBusy] = useState(false);
+  if (mode === "task" && !id && !d.projects.length) {
+    return (
+      <Modal title="New task" onClose={close}>
+        <Empty
+          title="Create your first project"
+          description="Tasks belong to a project. Create one to start organizing your work."
+          action={
+            <Button primary onClick={() => show({ kind: "projectForm" })}>
+              <Plus size={16} />
+              Create project
+            </Button>
+          }
+        />
+      </Modal>
+    );
+  }
   return (
     <Modal
       title={`${id ? "Edit" : "New"} ${mode}`}
@@ -726,7 +742,7 @@ export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
 }
 export function Invite({ projectId }: { projectId?: string }) {
   const { data: d, session, rpc, notify } = useStore(),
-    { close } = useUI();
+    { close, show } = useUI();
   const projects = d.projects.filter((p) => p.owner_id === session.user.id);
   const [pid, setPid] = useState(projectId || projects[0]?.id || ""),
     [email, setEmail] = useState(""),
@@ -738,8 +754,18 @@ export function Invite({ projectId }: { projectId?: string }) {
     <Modal title="Add someone to a project" onClose={close}>
       {!projects.length ? (
         <Empty
-          title="Create your first project"
-          description="Only a project owner can add or invite members."
+          title={
+            d.projects.length
+              ? "Create a project to invite teammates"
+              : "Create your first project"
+          }
+          description="Only a project owner can add or invite members. Create a project to manage your own team."
+          action={
+            <Button primary onClick={() => show({ kind: "projectForm" })}>
+              <Plus size={16} />
+              Create project
+            </Button>
+          }
         />
       ) : (
         <>
