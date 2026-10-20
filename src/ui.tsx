@@ -36,7 +36,9 @@ export function Button({
   disabled = false,
   type = "button",
   className = "",
+  form,
 }: {
+  form?: string;
   children: ReactNode;
   onClick?: () => void;
   primary?: boolean;
@@ -48,6 +50,7 @@ export function Button({
   return (
     <button
       type={type}
+      form={form}
       onClick={onClick}
       disabled={disabled}
       className={`button ${primary ? "primary" : "glass"} ${small ? "small" : ""} ${className}`}
@@ -86,7 +89,9 @@ export function Segments({
   options,
   value,
   onChange,
+  disabled = false,
 }: {
+  disabled?: boolean;
   label: string;
   options: readonly string[];
   value: string;
@@ -97,6 +102,7 @@ export function Segments({
       {options.map((v) => (
         <button
           key={v}
+          disabled={disabled}
           aria-pressed={v === value}
           className={v === value ? "selected" : ""}
           onClick={() => onChange(v)}
@@ -418,7 +424,13 @@ export function Form({
   submit,
   label = "Save",
   onDone,
+  id,
+  hideSubmit = false,
+  onPendingChange,
 }: {
+  onPendingChange?: (pending: boolean) => void;
+  id?: string;
+  hideSubmit?: boolean;
   children?: ReactNode;
   submit: () => Promise<unknown>;
   label?: string;
@@ -429,10 +441,12 @@ export function Form({
   return (
     <form
       className="form"
+      id={id}
       onSubmit={async (e: FormEvent) => {
         e.preventDefault();
         if (busy) return;
         setBusy(true);
+        onPendingChange?.(true);
         setError("");
         try {
           await submit();
@@ -441,6 +455,7 @@ export function Form({
           setError(errorText(e));
         } finally {
           setBusy(false);
+          onPendingChange?.(false);
         }
       }}
     >
@@ -450,12 +465,14 @@ export function Form({
           {error}
         </p>
       )}
-      <footer>
-        <Button type="submit" primary disabled={busy}>
-          {busy ? <Loader2 size={16} className="spin" /> : null}
-          {busy ? "Saving…" : label}
-        </Button>
-      </footer>
+      {!hideSubmit && (
+        <footer>
+          <Button type="submit" primary disabled={busy}>
+            {busy ? <Loader2 size={16} className="spin" /> : null}
+            {busy ? "Saving…" : label}
+          </Button>
+        </footer>
+      )}
     </form>
   );
 }

@@ -155,7 +155,8 @@ export function Shell() {
   useAppearance();
   const [path, setPath] = useState(location.hash.slice(1) || "/home"),
     [overlay, setOverlay] = useState<Overlay | null>(null),
-    [query, setQuery] = useState("");
+    [query, setQuery] = useState(""),
+    [scrolled, setScrolled] = useState(false);
   const go = (p: string) => {
     setOverlay(null);
     location.hash = p;
@@ -191,6 +192,43 @@ export function Shell() {
       window.removeEventListener("keydown", key);
     };
   }, []);
+  useEffect(() => {
+    const scroll = () => setScrolled(window.scrollY > 82);
+    scroll();
+    window.addEventListener("scroll", scroll, { passive: true });
+    return () => window.removeEventListener("scroll", scroll);
+  }, []);
+  useEffect(() => {
+    let frame = 0;
+    const pointer = (event: PointerEvent) => {
+      const target = (event.target as Element)?.closest?.(
+        ".card,.project-tile,.team-card",
+      ) as HTMLElement | null;
+      if (!target) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const r = target.getBoundingClientRect();
+        target.style.setProperty("--pointer-x", `${event.clientX - r.left}px`);
+        target.style.setProperty("--pointer-y", `${event.clientY - r.top}px`);
+      });
+    };
+    document.addEventListener("pointermove", pointer, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("pointermove", pointer);
+    };
+  }, []);
+  const previousPage = useRef(path.split("/")[1]);
+  useEffect(() => {
+    const nextPage = path.split("/")[1];
+    if (nextPage !== previousPage.current) {
+      if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: "instant" });
+      const title = document.querySelector<HTMLElement>(".page-lead h1");
+      title?.setAttribute("tabindex", "-1");
+      title?.focus({ preventScroll: true });
+    }
+    previousPage.current = nextPage;
+  }, [path]);
   const [page, id] = path.split("/").filter(Boolean),
     unread =
       d.notifications.filter((n) => !n.read_at).length + d.invitations.length;
@@ -260,7 +298,7 @@ export function Shell() {
         </nav>
         <div className="pinned-projects">
           <header>
-            Pinned projects{" "}
+            Pinned{" "}
             <IconButton
               icon={Plus}
               label="Create project"
@@ -287,18 +325,23 @@ export function Shell() {
           <Avatar person={me} size={36} />
           <span>
             <strong>{me?.full_name || "Your account"}</strong>
-            <small>Personal workspace</small>
+            <small>{me?.job_title || "Team member"}</small>
           </span>
           <span>⌄</span>
         </button>
       </aside>
+      {scrolled && (
+        <div className="toolbar-page glass">
+          <span>{NAV.find((n) => n[0] === page)?.[1] || "Hayola Tasks"}</span>
+        </div>
+      )}
       <div className="topbar glass">
         <button
           className="search-button"
           onClick={() => show({ kind: "search" })}
         >
           <Search size={17} />
-          <span>Search anything…</span>
+          <span>Search</span>
           <kbd>⌘ K</kbd>
         </button>
         <IconButton
@@ -351,7 +394,7 @@ export function Shell() {
         )}
       </main>
       <nav className="mobile-nav glass" aria-label="Mobile navigation">
-        {NAV.slice(0, 6).map(([key, label, Icon]) => (
+        {NAV.map(([key, label, Icon]) => (
           <a
             key={key}
             href={"#/" + key}

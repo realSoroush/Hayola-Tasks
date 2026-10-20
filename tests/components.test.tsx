@@ -250,6 +250,7 @@ describe("Real data flows", () => {
   it("profile team options match database values", async () => {
     const { save } = wrap(<Settings />);
     await userEvent.click(screen.getByRole("button", { name: "Profile" }));
+    await userEvent.click(screen.getByText("Team, timezone & capacity"));
     await userEvent.selectOptions(screen.getByLabelText("team"), "Other");
     await userEvent.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() =>
@@ -300,5 +301,80 @@ it("accept invitation uses the SQL RPC argument contract", async () => {
   expect(rpc).toHaveBeenCalledWith("respond_invitation", {
     p_id: "inv-1",
     p_accept: true,
+  });
+});
+
+describe("Reference dashboard interactions", () => {
+  it("renders reference widget order and a true completion chart", () => {
+    wrap(<Home />);
+    const names = [...document.querySelectorAll(".home-grid>section")].map(
+      (e) => e.getAttribute("aria-label"),
+    );
+    expect(names).toEqual([
+      "Today",
+      "Up next",
+      "Focus",
+      "My tasks",
+      "This week",
+      "Projects",
+      "Right now",
+    ]);
+    expect(
+      screen.getByRole("img", { name: "Today’s progress rings" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("list", { name: "Tasks finished each day this week" }),
+    ).toBeTruthy();
+  });
+  it("switches Right now from team to activity without changing stored records", async () => {
+    const { save } = wrap(<Home />);
+    expect(screen.getByText("Soroush Team")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByText("A little quiet here")).toBeTruthy();
+    expect(save).not.toHaveBeenCalled();
+  });
+  it("starts the selected focus preset through the server RPC", async () => {
+    const { rpc } = wrap(<Home />);
+    await userEvent.click(screen.getByRole("button", { name: "50m" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start focus" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("focus_command", {
+        p_action: "start",
+        p_task_id: null,
+        p_minutes: 50,
+      }),
+    );
+  });
+});
+
+describe("Calendar and reports after layout alignment", () => {
+  it("week calendar offers actual hour-specific event creation", async () => {
+    const { show } = wrap(<Calendar />);
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    const first = document.querySelector<HTMLButtonElement>(".calendar-hour");
+    expect(first).toBeTruthy();
+    await userEvent.click(first!);
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "eventForm", time: "07:00" }),
+    );
+  });
+  it("throughput can be inspected as a real-data table", async () => {
+    wrap(<Insights />);
+    await userEvent.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("table", { name: "Task throughput" })).toBeTruthy();
+    expect(
+      screen.getByRole("table", { name: "Completed tasks by project" }),
+    ).toBeTruthy();
+  });
+  it("preference controls persist the chosen theme", async () => {
+    const { save } = wrap(<Settings />);
+    await userEvent.click(screen.getByRole("button", { name: "light" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        "user_settings",
+        { theme: "light" },
+        "u1",
+      ),
+    );
   });
 });
