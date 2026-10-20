@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import {
   Pencil,
   Trash2,
@@ -425,9 +425,28 @@ export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
       </select>
     </Field>
   );
+  const formId = useId(),
+    [formBusy, setFormBusy] = useState(false);
   return (
-    <Modal title={`${id ? "Edit" : "New"} ${mode}`} onClose={close}>
+    <Modal
+      title={`${id ? "Edit" : "New"} ${mode}`}
+      onClose={close}
+      actions={
+        <Button primary small type="submit" form={formId} disabled={formBusy}>
+          {formBusy
+            ? "Saving…"
+            : id
+              ? "Save changes"
+              : mode === "project"
+                ? "Create project"
+                : `Add ${mode}`}
+        </Button>
+      }
+    >
       <Form
+        id={formId}
+        onPendingChange={setFormBusy}
+        hideSubmit
         label={
           id
             ? "Save changes"

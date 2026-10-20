@@ -2,6 +2,10 @@
 
 An independent, English-language project workspace inspired by the Pane reference interface, with the supplied Hayola logo. Real Supabase authentication and PostgreSQL data; no demo accounts, sample projects, seeded users or production mock fallback.
 
+## Interface update
+
+The interface alignment changes are documented in [docs/UI-PARITY.md](docs/UI-PARITY.md), including measured reference dimensions, restored widgets, validation results and the remaining browser screenshot verification boundary.
+
 ## Delivery status
 
 The source builds locally and includes database authorization and UI interaction tests. It has **not been connected to a live Supabase project or deployed to GitHub/Vercel**. The reference informed layout, typography, glass surfaces and responsive behavior; exact screenshot parity has **not** been verified in a browser. Treat visual acceptance and a live end-to-end smoke test as outstanding release checks.
