@@ -19,7 +19,7 @@ import {
   Insights,
   Settings,
 } from "../src/pages";
-import { Modal } from "../src/ui";
+import { Line, Modal } from "../src/ui";
 import App, { Shell } from "../src/App";
 const { login, signup, reset, lookup } = vi.hoisted(() => ({
   login: vi.fn(),
@@ -171,6 +171,31 @@ describe("Backend setup and authentication", () => {
   });
 });
 describe("Real data flows", () => {
+  it("offers project creation instead of an unusable task form in an empty workspace", async () => {
+    const { show, save } = wrap(<Editor kind="taskForm" />);
+    expect(screen.queryByRole("button", { name: "Add task" })).toBeNull();
+    expect(screen.queryByLabelText("Title")).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create project" }),
+    );
+    expect(show).toHaveBeenCalledWith({ kind: "projectForm" });
+    expect(save).not.toHaveBeenCalled();
+  });
+  it("links the empty invitation state to project creation without sending an invitation", async () => {
+    const { show, rpc } = wrap(<Invite />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create project" }),
+    );
+    expect(show).toHaveBeenCalledWith({ kind: "projectForm" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("explains owner-only invitations to members who already belong to a project", () => {
+    wrap(<Invite />, { projects: [{ ...project, owner_id: "another-owner" }] });
+    expect(
+      screen.getByText("Create a project to invite teammates"),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Email")).toBeNull();
+  });
   it("task form writes project, author and entered title", async () => {
     const { save } = wrap(<Editor kind="taskForm" projectId="p1" />, {
       projects: [project],
@@ -376,5 +401,40 @@ describe("Calendar and reports after layout alignment", () => {
         "u1",
       ),
     );
+  });
+});
+
+describe("Throughput chart scale", () => {
+  it.each([0, 1, 3, 19])(
+    "uses distinct integer ticks for a peak of %i tasks",
+    (peak) => {
+      const { container } = render(
+        <Line
+          points={[{ key: "2026-10-20", value: peak, previous: 0 }]}
+          label="Throughput"
+        />,
+      );
+      const ticks = [...container.querySelectorAll("svg > g > text")]
+        .filter((node) => node.getAttribute("text-anchor") === "end")
+        .map((node) => Number(node.textContent));
+      expect(ticks).toHaveLength(3);
+      expect(new Set(ticks).size).toBe(3);
+      expect(ticks.every(Number.isInteger)).toBe(true);
+      expect(ticks[0]).toBe(0);
+      expect(ticks[2]).toBeGreaterThanOrEqual(peak);
+    },
+  );
+  it("scales to the previous period when that series is visible", () => {
+    const { container } = render(
+      <Line
+        points={[{ key: "2026-10-20", value: 1, previous: 19 }]}
+        label="Throughput"
+      />,
+    );
+    expect(container.querySelector("svg > g:last-of-type")).toBeTruthy();
+    const ticks = [
+      ...container.querySelectorAll('text[text-anchor="end"]'),
+    ].map((node) => Number(node.textContent));
+    expect(ticks).toEqual([0, 10, 20]);
   });
 });

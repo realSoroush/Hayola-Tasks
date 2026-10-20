@@ -631,7 +631,19 @@ export function Line({
   previous?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null),
-    max = Math.max(1, ...points.flatMap((p) => [p.value, p.previous])),
+    // Task counts need distinct integer ticks, including when all counts are zero.
+    max = Math.max(
+      2,
+      Math.ceil(
+        Math.max(
+          0,
+          ...points.flatMap((p) => [
+            p.value,
+            ...(previous ? [p.previous] : []),
+          ]),
+        ) / 2,
+      ) * 2,
+    ),
     x = (i: number) => 35 + (i * 650) / Math.max(1, points.length - 1),
     y = (v: number) => 185 - (v / max) * 165,
     path = (field: "value" | "previous") =>
