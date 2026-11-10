@@ -207,7 +207,10 @@ export function Tasks({
     [person, setPerson] = useState("all"),
     [priority, setPriority] = useState("all"),
     [query, setQuery] = useState(""),
-    [sort, setSort] = useState("Manual");
+    [sort, setSort] = useState("Manual"),
+    [dragging, setDragging] = useState<string | null>(null),
+    [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null),
+    [savingOrder, setSavingOrder] = useState(false);
   let tasks = d.tasks.filter(
     (t) =>
       (!projectId || t.project_id === projectId) &&
@@ -222,28 +225,45 @@ export function Tasks({
         .includes(query.toLowerCase()),
   );
   tasks = [...tasks].sort((a, b) =>
-    sort === "Due date"
+    view === "List" && sort === "Due date"
       ? (a.due_date || "9999").localeCompare(b.due_date || "9999")
-      : sort === "Priority"
+      : view === "List" && sort === "Priority"
         ? ["Urgent", "High", "Medium", "Low"].indexOf(a.priority) -
           ["Urgent", "High", "Medium", "Low"].indexOf(b.priority)
         : a.sort_order - b.sort_order,
   );
-  const move = async (t: Row, status: string) => {
+  const move = async (t: Row, status: string, target?: Row, after = false) => {
+    if (savingOrder || target?.id === t.id) return;
+    const column = d.tasks
+      .filter((x) => x.status === status && x.id !== t.id &&
+        (!projectId || x.project_id === projectId) &&
+        (project === "all" || x.project_id === project))
+      .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+    const index = target ? column.findIndex((x) => x.id === target.id) + (after ? 1 : 0) : column.length;
+    if (index < 0) return;
+    const previous = column[index - 1]?.sort_order, next = column[index]?.sort_order;
+    const rank = previous === undefined ? (next === undefined ? 1024 : next - 1024)
+      : next === undefined ? previous + 1024 : previous + (next - previous) / 2;
+    setDragging(null);
+    setDrop(null);
+    setSavingOrder(true);
     try {
-      await taskChange(t, {
-        status,
-        sort_order:
-          Math.max(
-            0,
-            ...d.tasks
-              .filter((x) => x.status === status)
-              .map((x) => x.sort_order),
-          ) + 1024,
-      });
+      if (Number.isFinite(rank) && (previous === undefined || rank > previous) &&
+          (next === undefined || rank < next)) {
+        await taskChange(t, { status, sort_order: rank });
+      } else {
+        column.splice(index, 0, t);
+        for (let i = 0; i < column.length; i++) {
+          const item = column[i], sort_order = (i + 1) * 1024;
+          if (item.sort_order !== sort_order || item.status !== status)
+            await taskChange(item, { status, sort_order });
+        }
+      }
       notify("Task moved");
     } catch (e) {
       notify(errorText(e));
+    } finally {
+      setSavingOrder(false);
     }
   };
   return (
@@ -366,13 +386,18 @@ export function Tasks({
               aria-label={status}
               className="board-column glass"
               key={status}
-              onDragOver={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                if (!dragging) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDrop(null);
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 const t = d.tasks.find(
                   (t) => t.id === e.dataTransfer.getData("text/plain"),
                 );
-                if (t) void move(t, status);
+                if (t && dragging) void move(t, status);
               }}
             >
               <header>
@@ -400,9 +425,36 @@ export function Tasks({
                         "blue")
                     }
                     key={t.id}
-                    draggable
-                    onDragStart={(e) =>
-                      e.dataTransfer.setData("text/plain", t.id)
+                    draggable={!savingOrder}
+                    style={{
+                      cursor: savingOrder ? "wait" : dragging === t.id ? "grabbing" : "grab",
+                      opacity: dragging === t.id ? 0.4 : 1,
+                      transition: "opacity 160ms ease, box-shadow 160ms ease",
+                      boxShadow: drop?.id === t.id
+                        ? `0 ${drop.after ? 4 : -4}px 0 0 var(--accent, #7770d8)`
+                        : undefined,
+                    }}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", t.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDragging(t.id);
+                    }}
+                    onDragEnd={() => { setDragging(null); setDrop(null); }}
+                    onDragOver={(e) => {
+                      if (!dragging || dragging === t.id) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.dataTransfer.dropEffect = "move";
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setDrop({ id: t.id, after: e.clientY > rect.top + rect.height / 2 });
+                    }}
+                    onDrop={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const source = d.tasks.find((x) => x.id === e.dataTransfer.getData("text/plain"));
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      if (source) void move(source, status, t, e.clientY > rect.top + rect.height / 2);
                     }
                   >
                     <div>
