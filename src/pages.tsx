@@ -490,7 +490,7 @@ export function Projects({ id }: { id?: string }) {
     { show, go } = useUI();
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("All"),
-    [tab, setTab] = useState("Overview");
+    [tab, setTab] = useState("Tasks");
   const p = d.projects.find((p) => p.id === id),
     owned = p?.owner_id === session.user.id;
   const action = async (fn: () => Promise<unknown>) => {
@@ -547,7 +547,7 @@ export function Projects({ id }: { id?: string }) {
         />
         <Segments
           label="Project view"
-          options={["Overview", "Tasks", "Team"]}
+          options={["Tasks", "Overview", "Team"]}
           value={tab}
           onChange={setTab}
         />
