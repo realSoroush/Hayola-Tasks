@@ -455,7 +455,7 @@ export function Tasks({
                       const source = d.tasks.find((x) => x.id === e.dataTransfer.getData("text/plain"));
                       const rect = e.currentTarget.getBoundingClientRect();
                       if (source) void move(source, status, t, e.clientY > rect.top + rect.height / 2);
-                    }
+                    }}
                   >
                     <div>
                       <ProjectTag
