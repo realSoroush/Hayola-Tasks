@@ -59,6 +59,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  history.replaceState(null, "", location.pathname);
 });
 const me = {
     id: "u1",
@@ -443,10 +444,12 @@ describe("Project board lists", () => {
   const taskStatuses = ["To do", "In progress", "In review", "Done"];
 
   it("inserts a new list at the selected position", async () => {
-    const { rpc } = wrap(<Tasks projectId={project.id} embedded />, {
+    location.hash = "/projects/" + project.id;
+    const { rpc } = wrap(<Shell />, {
       projects: [{ ...project, task_statuses: taskStatuses }],
     });
-    await userEvent.click(screen.getByRole("button", { name: "Add list" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create new" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Add list/ }));
     await userEvent.type(screen.getByLabelText("List name"), "Ready");
     await userEvent.selectOptions(
       screen.getByLabelText("Position"),

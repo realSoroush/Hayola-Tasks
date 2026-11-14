@@ -56,9 +56,6 @@ import {
   ActivityFeed,
   Line,
   Bars,
-  Field,
-  Form,
-  Modal,
 } from "./ui";
 import {
   dayKey,
@@ -214,9 +211,6 @@ export function Tasks({
     [dragging, setDragging] = useState<string | null>(null),
     [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null),
     [savingOrder, setSavingOrder] = useState(false),
-    [addingList, setAddingList] = useState(false),
-    [listName, setListName] = useState(""),
-    [insertBefore, setInsertBefore] = useState(""),
     [draggedList, setDraggedList] = useState<string | null>(null),
     [listTarget, setListTarget] = useState<{
       status: string;
@@ -381,54 +375,9 @@ export function Tasks({
           }
         />
       )}
-      {addingList && canEditLists && (
-        <Modal title="Add list" onClose={() => setAddingList(false)}>
-          <Form
-            label="Add list"
-            onDone={() => setAddingList(false)}
-            submit={async () => {
-              const name = listName.trim();
-              if (!name) throw Error("Enter a list name.");
-              if (
-                statuses.some(
-                  (status) => status.toLowerCase() === name.toLowerCase(),
-                )
-              )
-                throw Error("A list with this name already exists.");
-              const position = insertBefore
-                ? statuses.indexOf(insertBefore)
-                : statuses.length;
-              const next = [...statuses];
-              next.splice(position, 0, name);
-              await saveLists(next);
-            }}
-          >
-            <Field label="List name">
-              <input
-                autoFocus
-                value={listName}
-                required
-                maxLength={40}
-                onChange={(event) => setListName(event.target.value)}
-              />
-            </Field>
-            <Field label="Position">
-              <select
-                value={insertBefore}
-                onChange={(event) => setInsertBefore(event.target.value)}
-              >
-                <option value="">At the end</option>
-                {statuses.map((name) => (
-                  <option key={name} value={name}>
-                    Before {name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </Form>
-        </Modal>
-      )}
-      <div className="filters task-filters glass">
+      <div
+        className={`filters task-filters glass${embedded ? " project-task-filters" : ""}`}
+      >
         {embedded && (
           <Segments
             label="Task view"
@@ -476,20 +425,6 @@ export function Tasks({
             ...PRIORITIES.map((p) => ({ value: p, label: p })),
           ]}
         />
-        {view === "Board" && canEditLists && (
-          <Button
-            small
-            disabled={savingLists || statuses.length >= 40}
-            onClick={() => {
-              setListName("");
-              setInsertBefore("");
-              setAddingList(true);
-            }}
-          >
-            <Plus size={15} />
-            Add list
-          </Button>
-        )}
         {view === "List" && (
           <>
             {" "}
@@ -826,22 +761,41 @@ export function Projects({ id }: { id?: string }) {
     );
     return (
       <>
-        <button className="back-link" onClick={() => go("/projects")}>
-          ← All projects
-        </button>
-        <Header
-          title={p.name}
-          subtitle={p.description}
-          stats={[
-            { label: "Progress", value: progress(d.tasks, id) + "%" },
-            { label: "Members", value: members.length },
-            { label: "Target", value: dateLabel(p.due_date) },
-          ]}
-          actions={
-            <>
-              <Button onClick={() => show({ kind: "taskForm", projectId: id })}>
-                <Plus size={15} />
-                Add task
+        <header className="project-heading">
+          <div className="page-lead">
+            <button className="back-link" onClick={() => go("/projects")}>
+              ← All projects
+            </button>
+            <h1>{p.name}</h1>
+            {p.description && <p>{p.description}</p>}
+          </div>
+          <div className="project-heading-tools">
+            <Segments
+              label="Project view"
+              options={["Tasks", "Overview", "Team"]}
+              value={tab}
+              onChange={setTab}
+            />
+            <dl className="project-heading-stats">
+              <div>
+                <dt>Progress</dt>
+                <dd>{progress(d.tasks, id)}%</dd>
+              </div>
+              <div>
+                <dt>Members</dt>
+                <dd>{members.length}</dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>{dateLabel(p.due_date)}</dd>
+              </div>
+            </dl>
+            <div className="project-heading-actions">
+              <Button
+                small
+                onClick={() => show({ kind: "taskForm", projectId: id })}
+              >
+                <Plus size={15} /> Add task
               </Button>
               {owned && (
                 <IconButton
@@ -850,15 +804,9 @@ export function Projects({ id }: { id?: string }) {
                   onClick={() => show({ kind: "projectForm", id })}
                 />
               )}
-            </>
-          }
-        />
-        <Segments
-          label="Project view"
-          options={["Tasks", "Overview", "Team"]}
-          value={tab}
-          onChange={setTab}
-        />
+            </div>
+          </div>
+        </header>
         {tab === "Tasks" ? (
           <Tasks key={id} projectId={id} embedded />
         ) : tab === "Team" ? (

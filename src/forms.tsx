@@ -323,6 +323,91 @@ export function Setup() {
     </main>
   );
 }
+export function AddProjectList({
+  projects,
+  projectId,
+}: {
+  projects: Row[];
+  projectId?: string;
+}) {
+  const { rpc } = useStore();
+  const { close } = useUI();
+  const [selected, setSelected] = useState(projectId ?? projects[0]?.id);
+  const [name, setName] = useState("");
+  const [before, setBefore] = useState("");
+  const project = projects.find((item) => item.id === selected);
+  const statuses = projectTaskStatuses(project);
+
+  if (!project) return null;
+  return (
+    <Modal title="Add list" onClose={close}>
+      <Form
+        label="Add list"
+        onDone={close}
+        submit={async () => {
+          const label = name.trim();
+          if (!label) throw Error("Enter a list name.");
+          if (
+            statuses.some(
+              (status) => status.toLowerCase() === label.toLowerCase(),
+            )
+          )
+            throw Error("A list with this name already exists.");
+          const index = before ? statuses.indexOf(before) : statuses.length;
+          if (index < 0) throw Error("Choose a list position again.");
+          const next = [...statuses];
+          next.splice(index, 0, label);
+          await rpc("set_project_task_statuses", {
+            p_project_id: project.id,
+            p_previous: statuses,
+            p_statuses: next,
+          });
+        }}
+      >
+        {!projectId && projects.length > 1 && (
+          <Field label="Project">
+            <select
+              value={selected}
+              onChange={(event) => {
+                setSelected(event.target.value);
+                setBefore("");
+              }}
+            >
+              {projects.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label="List name">
+          <input
+            autoFocus
+            value={name}
+            required
+            maxLength={40}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <Field label="Position">
+          <select
+            value={before}
+            onChange={(event) => setBefore(event.target.value)}
+          >
+            <option value="">At the end</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                Before {status}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Form>
+    </Modal>
+  );
+}
+
 export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
   const { data: d, session, me, save, taskChange, notify } = useStore(),
     { close, go, show } = useUI();

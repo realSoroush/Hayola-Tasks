@@ -3799,3 +3799,77 @@ body {
 .board-column.board-column-drop-after {
   border-right: 3px solid var(--accent);
 }
+
+.project-heading {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.project-heading .page-lead {
+  min-height: 0;
+  padding: 0 min(475px, 48%) 0 0;
+}
+.project-heading .back-link {
+  margin: 0 0 4px;
+}
+.project-heading .page-lead h1 {
+  margin: 0;
+  max-width: none;
+  font-size: clamp(25px, 3vw, 38px);
+  line-height: 1.12;
+}
+.project-heading .page-lead p {
+  margin: 3px 0 0;
+  max-width: none;
+  font-size: 13px;
+}
+.project-heading-tools,
+.project-heading-stats,
+.project-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-heading-tools {
+  flex-wrap: wrap;
+}
+.project-heading-stats {
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+}
+.project-heading-stats > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 99px;
+  background: var(--fill);
+}
+.project-heading-stats dt {
+  color: var(--secondary);
+}
+.project-heading-stats dd {
+  margin: 0;
+  font-weight: 650;
+}
+.project-heading-actions {
+  margin-left: auto;
+}
+.filters.project-task-filters {
+  min-height: 0;
+  padding: 4px;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.project-task-filters .filter-search {
+  min-height: 33px;
+}
+.project-task-filters .filter-select select {
+  padding-block: 7px;
+}
+@media (max-width: 760px) {
+  .project-heading .page-lead {
+    padding: 58px 0 0;
+  }
+}

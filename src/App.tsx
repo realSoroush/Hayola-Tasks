@@ -44,6 +44,7 @@ import {
   Auth,
   Setup,
   Editor,
+  AddProjectList,
   Invite,
   TaskDetail,
   EventDetail,
@@ -232,6 +233,14 @@ export function Shell() {
   const [page, id] = path.split("/").filter(Boolean),
     unread =
       d.notifications.filter((n) => !n.read_at).length + d.invitations.length;
+  const currentProjectId = page === "projects" ? id : undefined;
+  const listProjects = d.projects.filter(
+    (project) =>
+      project.owner_id === session.user.id &&
+      Array.isArray(project.task_statuses) &&
+      project.task_statuses.length < 40 &&
+      (!currentProjectId || project.id === currentProjectId),
+  );
   let content =
     page === "home" ? (
       <Home />
@@ -433,11 +442,25 @@ export function Shell() {
           <Modal title="Focus" onClose={close}>
             <Focus />
           </Modal>
+        ) : o.kind === "projectList" ? (
+          <AddProjectList
+            projects={listProjects}
+            projectId={currentProjectId}
+          />
         ) : o.kind === "create" ? (
           <Modal title="Make something happen" onClose={close}>
             <div className="command-list">
               {[
                 ["taskForm", "New task", "A small step forward."],
+                ...(listProjects.length
+                  ? [
+                      [
+                        "projectList",
+                        "Add list",
+                        "Create a status on a project board.",
+                      ],
+                    ]
+                  : []),
                 [
                   "projectForm",
                   "New project",
@@ -446,7 +469,16 @@ export function Shell() {
                 ["eventForm", "New event", "Make time for what matters."],
                 ["invite", "Add person", "Bring your team together."],
               ].map(([kind, title, sub]) => (
-                <button key={kind} onClick={() => show({ kind })}>
+                <button
+                  key={kind}
+                  onClick={() =>
+                    show({
+                      kind,
+                      projectId:
+                        kind === "taskForm" ? currentProjectId : undefined,
+                    })
+                  }
+                >
                   <Plus size={20} />
                   <span>
                     <strong>{title}</strong>
