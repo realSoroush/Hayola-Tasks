@@ -22,7 +22,7 @@ import {
   useUI,
   db,
   errorText,
-  STATUSES,
+  projectTaskStatuses,
   PRIORITIES,
   COLORS,
   type Row,
@@ -626,6 +626,15 @@ export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
                       ...s,
                       project_id: e.target.value,
                       assignee_id: "",
+                      ...(mode === "task" && {
+                        status: projectTaskStatuses(
+                          d.projects.find(
+                            (project) => project.id === e.target.value,
+                          ),
+                        ).includes(s.status)
+                          ? s.status
+                          : "To do",
+                      }),
                       attendee_ids: [session.user.id],
                     }))
                   }
@@ -660,7 +669,13 @@ export function Editor({ kind, id, projectId, status, date, time }: Overlay) {
                   </Field>
                   {select("priority", "Priority", PRIORITIES)}
                   {input("due_date", "Due", "date")}
-                  {select("status", "Status", STATUSES)}
+                  {select(
+                    "status",
+                    "Status",
+                    projectTaskStatuses(
+                      d.projects.find((p) => p.id === v.project_id),
+                    ),
+                  )}
                   {input("estimate_hours", "Estimate (hours)", "number", true)}
                 </>
               ) : (
@@ -954,7 +969,7 @@ export function TaskDetail({ id }: { id: string }) {
       </div>
       <h2 className="detail-title">{t.title}</h2>
       <div className="status-segments" role="group" aria-label="Status">
-        {STATUSES.map((s) => (
+        {projectTaskStatuses(p).map((s) => (
           <button
             key={s}
             aria-pressed={s === t.status}

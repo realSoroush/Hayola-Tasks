@@ -10,6 +10,12 @@ import {
 import { createClient, type Session } from "@supabase/supabase-js";
 export type Row = { id: string; [key: string]: any };
 export const STATUSES = ["To do", "In progress", "In review", "Done"];
+
+export function projectTaskStatuses(project?: Row): string[] {
+  return Array.isArray(project?.task_statuses)
+    ? project.task_statuses
+    : STATUSES;
+}
 export const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
 export const COLORS = [
   "blue",

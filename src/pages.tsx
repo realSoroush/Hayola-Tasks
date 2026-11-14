@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import {
   Plus,
   Star,
@@ -25,6 +25,7 @@ import {
   Grid2X2,
   ChartNoAxesCombined,
   Sparkles,
+  GripHorizontal,
 } from "lucide-react";
 import {
   useStore,
@@ -32,6 +33,7 @@ import {
   db,
   errorText,
   STATUSES,
+  projectTaskStatuses,
   PRIORITIES,
   WALLS,
   type Row,
@@ -56,6 +58,7 @@ import {
   Bars,
   Field,
   Form,
+  Modal,
 } from "./ui";
 import {
   dayKey,
@@ -200,7 +203,7 @@ export function Tasks({
   projectId?: string;
   embedded?: boolean;
 }) {
-  const { data: d, session, taskChange, notify } = useStore(),
+  const { data: d, session, taskChange, rpc, notify } = useStore(),
     { show } = useUI();
   const [view, setView] = useState("Board"),
     [project, setProject] = useState("all"),
@@ -210,7 +213,50 @@ export function Tasks({
     [sort, setSort] = useState("Manual"),
     [dragging, setDragging] = useState<string | null>(null),
     [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null),
-    [savingOrder, setSavingOrder] = useState(false);
+    [savingOrder, setSavingOrder] = useState(false),
+    [addingList, setAddingList] = useState(false),
+    [listName, setListName] = useState(""),
+    [insertBefore, setInsertBefore] = useState(""),
+    [draggedList, setDraggedList] = useState<string | null>(null),
+    [listTarget, setListTarget] = useState<{
+      status: string;
+      after: boolean;
+    } | null>(null),
+    [savingLists, setSavingLists] = useState(false);
+  const boardProjectId = projectId || (project === "all" ? undefined : project);
+  const boardProject = d.projects.find((p) => p.id === boardProjectId);
+  const statuses = boardProject
+    ? projectTaskStatuses(boardProject)
+    : [...new Set([...STATUSES, ...d.projects.flatMap(projectTaskStatuses)])];
+  const canEditLists =
+    Array.isArray(boardProject?.task_statuses) &&
+    boardProject?.owner_id === session.user.id;
+  const saveLists = async (next: string[]) => {
+    if (!canEditLists || savingLists) return;
+    setSavingLists(true);
+    try {
+      await rpc("set_project_task_statuses", {
+        p_project_id: boardProjectId,
+        p_previous: statuses,
+        p_statuses: next,
+      });
+    } finally {
+      setSavingLists(false);
+    }
+  };
+  const clearListDrag = () => {
+    setDraggedList(null);
+    setListTarget(null);
+  };
+  const moveList = (from: string, to: string, after: boolean) => {
+    clearListDrag();
+    if (from === to || !statuses.includes(from) || !statuses.includes(to))
+      return;
+    const next = statuses.filter((name) => name !== from);
+    next.splice(next.indexOf(to) + Number(after), 0, from);
+    if (next.every((name, index) => name === statuses[index])) return;
+    void saveLists(next).catch((error) => notify(errorText(error)));
+  };
   let tasks = d.tasks.filter(
     (t) =>
       (!projectId || t.project_id === projectId) &&
@@ -234,27 +280,50 @@ export function Tasks({
   );
   const move = async (t: Row, status: string, target?: Row, after = false) => {
     if (savingOrder || target?.id === t.id) return;
+    const sourceProject = d.projects.find((p) => p.id === t.project_id);
+    if (!projectTaskStatuses(sourceProject).includes(status)) {
+      notify("This list is not available in the task’s project.");
+      return;
+    }
     const column = d.tasks
-      .filter((x) => x.status === status && x.id !== t.id &&
-        (!projectId || x.project_id === projectId) &&
-        (project === "all" || x.project_id === project))
+      .filter(
+        (x) =>
+          x.status === status &&
+          x.id !== t.id &&
+          (!projectId || x.project_id === projectId) &&
+          (project === "all" || x.project_id === project),
+      )
       .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-    const index = target ? column.findIndex((x) => x.id === target.id) + (after ? 1 : 0) : column.length;
-    if (index < 0) return;
-    const previous = column[index - 1]?.sort_order, next = column[index]?.sort_order;
-    const rank = previous === undefined ? (next === undefined ? 1024 : next - 1024)
-      : next === undefined ? previous + 1024 : previous + (next - previous) / 2;
+    const targetIndex = target
+      ? column.findIndex((x) => x.id === target.id)
+      : column.length;
+    if (targetIndex < 0) return;
+    const index = targetIndex + Number(!!target && after);
+    const previous = column[index - 1]?.sort_order,
+      next = column[index]?.sort_order;
+    const rank =
+      previous === undefined
+        ? next === undefined
+          ? 1024
+          : next - 1024
+        : next === undefined
+          ? previous + 1024
+          : previous + (next - previous) / 2;
     setDragging(null);
     setDrop(null);
     setSavingOrder(true);
     try {
-      if (Number.isFinite(rank) && (previous === undefined || rank > previous) &&
-          (next === undefined || rank < next)) {
+      if (
+        Number.isFinite(rank) &&
+        (previous === undefined || rank > previous) &&
+        (next === undefined || rank < next)
+      ) {
         await taskChange(t, { status, sort_order: rank });
       } else {
         column.splice(index, 0, t);
         for (let i = 0; i < column.length; i++) {
-          const item = column[i], sort_order = (i + 1) * 1024;
+          const item = column[i],
+            sort_order = (i + 1) * 1024;
           if (item.sort_order !== sort_order || item.status !== status)
             await taskChange(item, { status, sort_order });
         }
@@ -312,6 +381,53 @@ export function Tasks({
           }
         />
       )}
+      {addingList && canEditLists && (
+        <Modal title="Add list" onClose={() => setAddingList(false)}>
+          <Form
+            label="Add list"
+            onDone={() => setAddingList(false)}
+            submit={async () => {
+              const name = listName.trim();
+              if (!name) throw Error("Enter a list name.");
+              if (
+                statuses.some(
+                  (status) => status.toLowerCase() === name.toLowerCase(),
+                )
+              )
+                throw Error("A list with this name already exists.");
+              const position = insertBefore
+                ? statuses.indexOf(insertBefore)
+                : statuses.length;
+              const next = [...statuses];
+              next.splice(position, 0, name);
+              await saveLists(next);
+            }}
+          >
+            <Field label="List name">
+              <input
+                autoFocus
+                value={listName}
+                required
+                maxLength={40}
+                onChange={(event) => setListName(event.target.value)}
+              />
+            </Field>
+            <Field label="Position">
+              <select
+                value={insertBefore}
+                onChange={(event) => setInsertBefore(event.target.value)}
+              >
+                <option value="">At the end</option>
+                {statuses.map((name) => (
+                  <option key={name} value={name}>
+                    Before {name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </Form>
+        </Modal>
+      )}
       <div className="filters task-filters glass">
         {embedded && (
           <Segments
@@ -360,6 +476,20 @@ export function Tasks({
             ...PRIORITIES.map((p) => ({ value: p, label: p })),
           ]}
         />
+        {view === "Board" && canEditLists && (
+          <Button
+            small
+            disabled={savingLists || statuses.length >= 40}
+            onClick={() => {
+              setListName("");
+              setInsertBefore("");
+              setAddingList(true);
+            }}
+          >
+            <Plus size={15} />
+            Add list
+          </Button>
+        )}
         {view === "List" && (
           <>
             {" "}
@@ -380,158 +510,284 @@ export function Tasks({
           <TaskRows tasks={tasks} />
         </Card>
       ) : (
-        <div className="board">
-          {STATUSES.map((status) => (
-            <section
-              aria-label={status}
-              className="board-column glass"
-              key={status}
-              onDragOver={(e) => {
-                if (!dragging) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDrop(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const t = d.tasks.find(
-                  (t) => t.id === e.dataTransfer.getData("text/plain"),
-                );
-                if (t && dragging) void move(t, status);
-              }}
-            >
-              <header>
-                <i
-                  className={
-                    "status-dot status-" +
-                    status.toLowerCase().replaceAll(" ", "-")
-                  }
-                />
-                <h2>{status}</h2>
-                <span>{tasks.filter((t) => t.status === status).length}</span>
-                <IconButton
-                  icon={Plus}
-                  label={"Add " + status + " task"}
-                  onClick={() => show({ kind: "taskForm", projectId, status })}
-                />
-              </header>
-              {tasks
-                .filter((t) => t.status === status)
-                .map((t) => (
-                  <article
-                    className={
-                      "task-card glass hue-" +
-                      (d.projects.find((p) => p.id === t.project_id)?.color ||
-                        "blue")
+        <div
+          className="board"
+          style={{ "--board-columns": statuses.length } as CSSProperties}
+          onDragLeave={(event) => {
+            if (
+              !(event.relatedTarget instanceof Node) ||
+              !event.currentTarget.contains(event.relatedTarget)
+            )
+              setListTarget(null);
+          }}
+        >
+          {statuses.map((status, statusIndex) => {
+            const listProjectId = d.projects.find((p) =>
+              projectTaskStatuses(p).includes(status),
+            )?.id;
+            return (
+              <section
+                aria-label={status}
+                className={[
+                  "board-column glass",
+                  draggedList === status && "board-column-dragging",
+                  listTarget?.status === status &&
+                    (listTarget.after
+                      ? "board-column-drop-after"
+                      : "board-column-drop-before"),
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                key={status}
+                onDragOver={(e) => {
+                  if (draggedList) {
+                    if (draggedList === status) {
+                      setListTarget(null);
+                      return;
                     }
-                    key={t.id}
-                    draggable={!savingOrder}
-                    style={{
-                      cursor: savingOrder ? "wait" : dragging === t.id ? "grabbing" : "grab",
-                      opacity: dragging === t.id ? 0.4 : 1,
-                      transition: "opacity 160ms ease, box-shadow 160ms ease",
-                      boxShadow: drop?.id === t.id
-                        ? `0 ${drop.after ? 4 : -4}px 0 0 var(--accent, #7770d8)`
-                        : undefined,
-                    }}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", t.id);
-                      e.dataTransfer.effectAllowed = "move";
-                      setDragging(t.id);
-                    }}
-                    onDragEnd={() => { setDragging(null); setDrop(null); }}
-                    onDragOver={(e) => {
-                      if (!dragging || dragging === t.id) return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      e.dataTransfer.dropEffect = "move";
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setDrop({ id: t.id, after: e.clientY > rect.top + rect.height / 2 });
-                    }}
-                    onDrop={(e) => {
-                      if (!dragging) return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const source = d.tasks.find((x) => x.id === e.dataTransfer.getData("text/plain"));
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      if (source) void move(source, status, t, e.clientY > rect.top + rect.height / 2);
-                    }}
-                  >
-                    <div>
-                      <ProjectTag
-                        project={d.projects.find((p) => p.id === t.project_id)}
-                      />
-                      {["High", "Urgent"].includes(t.priority) && (
-                        <Priority value={t.priority} />
-                      )}
-                    </div>
-                    <button
-                      className="task-card-title"
-                      onClick={() => show({ kind: "task", id: t.id })}
-                    >
-                      {t.title}
-                    </button>
-                    {d.subtasks.some((s) => s.task_id === t.id) && (
-                      <div className="task-subtask-progress">
-                        <meter
-                          aria-label="Subtasks completed"
-                          min={0}
-                          max={
-                            d.subtasks.filter((s) => s.task_id === t.id).length
-                          }
-                          value={
-                            d.subtasks.filter(
-                              (s) => s.task_id === t.id && s.done,
-                            ).length
-                          }
-                        />
-                        <small>
-                          {
-                            d.subtasks.filter(
-                              (s) => s.task_id === t.id && s.done,
-                            ).length
-                          }
-                          /{d.subtasks.filter((s) => s.task_id === t.id).length}
-                        </small>
-                      </div>
-                    )}
-                    <footer>
-                      <span className="task-card-due">
-                        <CalendarDays size={12} />
-                        <Due date={t.due_date} done={t.status === "Done"} />
-                      </span>
-                      {d.comments.some((c) => c.task_id === t.id) && (
-                        <span className="task-comment-count">
-                          <MessageSquare size={12} />
-                          {d.comments.filter((c) => c.task_id === t.id).length}
-                        </span>
-                      )}
-                      <Avatar
-                        person={d.profiles.find((p) => p.id === t.assignee_id)}
-                        size={26}
-                      />
-                    </footer>
-                    <select
-                      className="move-task"
-                      aria-label={"Move " + t.title}
-                      value={t.status}
-                      onChange={(e) => void move(t, e.target.value)}
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
-                  </article>
-                ))}
-              <button
-                className="add-task"
-                onClick={() => show({ kind: "taskForm", projectId, status })}
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    const bounds = e.currentTarget.getBoundingClientRect();
+                    setListTarget({
+                      status,
+                      after: e.clientX > bounds.left + bounds.width / 2,
+                    });
+                    return;
+                  }
+                  if (!dragging) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDrop(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedList) {
+                    const bounds = e.currentTarget.getBoundingClientRect();
+                    moveList(
+                      draggedList,
+                      status,
+                      e.clientX > bounds.left + bounds.width / 2,
+                    );
+                    return;
+                  }
+                  const t = d.tasks.find(
+                    (t) => t.id === e.dataTransfer.getData("text/plain"),
+                  );
+                  if (t && dragging) void move(t, status);
+                }}
               >
-                <Plus size={15} />
-                Add task
-              </button>
-            </section>
-          ))}
+                <header>
+                  <i
+                    className={
+                      "status-dot status-" +
+                      status.toLowerCase().replaceAll(" ", "-")
+                    }
+                  />
+                  <h2 title={status}>{status}</h2>
+                  <span>{tasks.filter((t) => t.status === status).length}</span>
+                  {canEditLists && (
+                    <button
+                      type="button"
+                      className="board-list-grip"
+                      aria-label={`Reorder ${status} list. Use left and right arrow keys.`}
+                      title="Drag to reorder list"
+                      disabled={savingLists}
+                      draggable={!savingLists}
+                      onDragStart={(event) => {
+                        const column =
+                          event.currentTarget.closest(".board-column");
+                        if (column)
+                          event.dataTransfer.setDragImage(column, 24, 22);
+                        event.dataTransfer.setData("text/plain", status);
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggedList(status);
+                      }}
+                      onDragEnd={clearListDrag}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key !== "ArrowLeft" &&
+                          event.key !== "ArrowRight"
+                        )
+                          return;
+                        event.preventDefault();
+                        const after = event.key === "ArrowRight";
+                        const adjacent =
+                          statuses[statusIndex + (after ? 1 : -1)];
+                        if (adjacent) moveList(status, adjacent, after);
+                      }}
+                    >
+                      <GripHorizontal size={17} aria-hidden="true" />
+                    </button>
+                  )}
+                  <IconButton
+                    icon={Plus}
+                    label={"Add " + status + " task"}
+                    onClick={() =>
+                      show({
+                        kind: "taskForm",
+                        projectId: boardProjectId ?? listProjectId,
+                        status,
+                      })
+                    }
+                  />
+                </header>
+                {tasks
+                  .filter((t) => t.status === status)
+                  .map((t) => (
+                    <article
+                      className={
+                        "task-card glass hue-" +
+                        (d.projects.find((p) => p.id === t.project_id)?.color ||
+                          "blue")
+                      }
+                      key={t.id}
+                      draggable={!savingOrder}
+                      style={{
+                        cursor: savingOrder
+                          ? "wait"
+                          : dragging === t.id
+                            ? "grabbing"
+                            : "grab",
+                        opacity: dragging === t.id ? 0.4 : 1,
+                        transition: "opacity 160ms ease, box-shadow 160ms ease",
+                        boxShadow:
+                          drop?.id === t.id
+                            ? `0 ${drop.after ? 4 : -4}px 0 0 var(--accent, #7770d8)`
+                            : undefined,
+                      }}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", t.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragging(t.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragging(null);
+                        setDrop(null);
+                      }}
+                      onDragOver={(e) => {
+                        if (!dragging || dragging === t.id) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = "move";
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setDrop({
+                          id: t.id,
+                          after: e.clientY > rect.top + rect.height / 2,
+                        });
+                      }}
+                      onDrop={(e) => {
+                        if (!dragging) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const source = d.tasks.find(
+                          (x) => x.id === e.dataTransfer.getData("text/plain"),
+                        );
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        if (source)
+                          void move(
+                            source,
+                            status,
+                            t,
+                            e.clientY > rect.top + rect.height / 2,
+                          );
+                      }}
+                    >
+                      <div>
+                        <ProjectTag
+                          project={d.projects.find(
+                            (p) => p.id === t.project_id,
+                          )}
+                        />
+                        {["High", "Urgent"].includes(t.priority) && (
+                          <Priority value={t.priority} />
+                        )}
+                      </div>
+                      <button
+                        className="task-card-title"
+                        onClick={() => show({ kind: "task", id: t.id })}
+                      >
+                        {t.title}
+                      </button>
+                      {d.subtasks.some((s) => s.task_id === t.id) && (
+                        <div className="task-subtask-progress">
+                          <meter
+                            aria-label="Subtasks completed"
+                            min={0}
+                            max={
+                              d.subtasks.filter((s) => s.task_id === t.id)
+                                .length
+                            }
+                            value={
+                              d.subtasks.filter(
+                                (s) => s.task_id === t.id && s.done,
+                              ).length
+                            }
+                          />
+                          <small>
+                            {
+                              d.subtasks.filter(
+                                (s) => s.task_id === t.id && s.done,
+                              ).length
+                            }
+                            /
+                            {
+                              d.subtasks.filter((s) => s.task_id === t.id)
+                                .length
+                            }
+                          </small>
+                        </div>
+                      )}
+                      <footer>
+                        <span className="task-card-due">
+                          <CalendarDays size={12} />
+                          <Due date={t.due_date} done={t.status === "Done"} />
+                        </span>
+                        {d.comments.some((c) => c.task_id === t.id) && (
+                          <span className="task-comment-count">
+                            <MessageSquare size={12} />
+                            {
+                              d.comments.filter((c) => c.task_id === t.id)
+                                .length
+                            }
+                          </span>
+                        )}
+                        <Avatar
+                          person={d.profiles.find(
+                            (p) => p.id === t.assignee_id,
+                          )}
+                          size={26}
+                        />
+                      </footer>
+                      <select
+                        className="move-task"
+                        aria-label={"Move " + t.title}
+                        value={t.status}
+                        onChange={(e) => void move(t, e.target.value)}
+                      >
+                        {projectTaskStatuses(
+                          d.projects.find((p) => p.id === t.project_id),
+                        ).map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </select>
+                    </article>
+                  ))}
+                <button
+                  className="add-task"
+                  onClick={() =>
+                    show({
+                      kind: "taskForm",
+                      projectId: boardProjectId,
+                      status,
+                    })
+                  }
+                >
+                  <Plus size={15} />
+                  Add task
+                </button>
+              </section>
+            );
+          })}
         </div>
       )}
     </>
@@ -604,7 +860,7 @@ export function Projects({ id }: { id?: string }) {
           onChange={setTab}
         />
         {tab === "Tasks" ? (
-          <Tasks projectId={id} embedded />
+          <Tasks key={id} projectId={id} embedded />
         ) : tab === "Team" ? (
           <Card
             title="Project team"

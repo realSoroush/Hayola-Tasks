@@ -438,3 +438,49 @@ describe("Throughput chart scale", () => {
     expect(ticks).toEqual([0, 10, 20]);
   });
 });
+
+describe("Project board lists", () => {
+  const taskStatuses = ["To do", "In progress", "In review", "Done"];
+
+  it("inserts a new list at the selected position", async () => {
+    const { rpc } = wrap(<Tasks projectId={project.id} embedded />, {
+      projects: [{ ...project, task_statuses: taskStatuses }],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Add list" }));
+    await userEvent.type(screen.getByLabelText("List name"), "Ready");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Position"),
+      "In progress",
+    );
+    await userEvent.click(
+      screen.getByRole("dialog").querySelector('button[type="submit"]')!,
+    );
+    expect(rpc).toHaveBeenCalledWith("set_project_task_statuses", {
+      p_project_id: project.id,
+      p_previous: taskStatuses,
+      p_statuses: ["To do", "Ready", "In progress", "In review", "Done"],
+    });
+  });
+
+  it("drops a whole list before another column", () => {
+    const { rpc, taskChange } = wrap(
+      <Tasks projectId={project.id} embedded />,
+      {
+        projects: [{ ...project, task_statuses: taskStatuses }],
+      },
+    );
+    const grip = screen.getByRole("button", { name: /^Reorder Done list/ });
+    const column = screen.getByRole("region", { name: "In progress" });
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn() };
+    fireEvent.dragStart(grip, { dataTransfer });
+    fireEvent.dragOver(column, { dataTransfer });
+    expect(column.classList.contains("board-column-drop-before")).toBe(true);
+    fireEvent.drop(column, { dataTransfer });
+    expect(rpc).toHaveBeenCalledWith("set_project_task_statuses", {
+      p_project_id: project.id,
+      p_previous: taskStatuses,
+      p_statuses: ["To do", "Done", "In progress", "In review"],
+    });
+    expect(taskChange).not.toHaveBeenCalled();
+  });
+});

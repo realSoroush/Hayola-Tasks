@@ -1000,7 +1000,7 @@ body {
   padding: 10px 7px;
 }
 .board {
-  grid-template-columns: repeat(4, minmax(258px, 1fr));
+  grid-template-columns: repeat(var(--board-columns, 4), minmax(258px, 1fr));
   gap: 16px;
   overflow-x: auto;
   align-items: start;
@@ -1474,7 +1474,7 @@ body {
     display: none;
   }
   .board {
-    grid-template-columns: repeat(4, 258px);
+    grid-template-columns: repeat(var(--board-columns, 4), 258px);
   }
 }
 @media (max-width: 760px) {
@@ -1745,7 +1745,7 @@ body {
     font-size: 12px;
   }
   .board {
-    grid-template-columns: repeat(4, minmax(258px, 78vw));
+    grid-template-columns: repeat(var(--board-columns, 4), minmax(258px, 78vw));
     gap: 12px;
     margin-right: -16px;
     padding-right: 16px;
@@ -3766,4 +3766,36 @@ body {
   .focus-card .focus-controls > .button {
     min-height: 40px;
   }
+}
+
+.board-column > header h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-list-grip {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+}
+.board-list-grip:hover,
+.board-list-grip:focus-visible {
+  background: var(--glass);
+  color: var(--accent-ink);
+}
+.board-column-dragging {
+  opacity: 0.45;
+}
+.board-column.board-column-drop-before {
+  border-left: 3px solid var(--accent);
+}
+.board-column.board-column-drop-after {
+  border-right: 3px solid var(--accent);
 }

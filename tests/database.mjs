@@ -370,6 +370,45 @@ await ok("Archive revokes project access; owner may restore", async () => {
   await as(A, "update projects set deleted_at=null where id=$1", [P]);
   assert.equal((await as(B, "select * from tasks")).rows.length, 1);
 });
+await db.exec("reset role");
+await db.exec(
+  await readFile(
+    new URL(
+      "../supabase/migrations/202611140001_project_lists.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
+const defaults = ["To do", "In progress", "In review", "Done"];
+const custom = ["To do", "Ready", "In progress", "In review", "Done"];
+const setLists = "select set_project_task_statuses($1, $2, $3)";
+await ok("Owner can add and reorder a list without moving tasks", async () => {
+  await as(A, setLists, [P, defaults, custom]);
+  await as(B, "update tasks set status='Ready' where id=$1", [T]);
+  const reordered = ["Ready", ...defaults];
+  await as(A, setLists, [P, custom, reordered]);
+  assert.deepEqual(
+    (await as(B, "select task_statuses from projects where id=$1", [P])).rows[0]
+      .task_statuses,
+    reordered,
+  );
+  assert.equal(
+    (await as(B, "select status from tasks where id=$1", [T])).rows[0].status,
+    "Ready",
+  );
+});
+await ok(
+  "List edits reject non-owners, stale order, and invalid statuses",
+  async () => {
+    const reordered = ["Ready", ...defaults];
+    await denied(B, setLists, [P, reordered, custom]);
+    await denied(A, setLists, [P, defaults, custom]);
+    await denied(A, setLists, [P, reordered, [...reordered, "ready"]]);
+    await denied(A, setLists, [P, reordered, defaults]);
+    await denied(B, "update tasks set status='Unknown' where id=$1", [T]);
+  },
+);
 await db.exec("reset role;set role anon");
 await ok("Anonymous role cannot read private data", async () => {
   let failed = false;

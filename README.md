@@ -20,6 +20,8 @@ The source builds locally and includes database authorization and UI interaction
 
 Open your new Supabase project's SQL Editor and run **either** `supabase/setup.sql` **or** `supabase/migrations/202610190001_hayola.sql`, once. These are the same migration. Do not run both. The migration is intentionally transactional and designed for a fresh project. It creates tables, triggers, policies, indexes and restricted RPCs, without any seed rows.
 
+After the initial schema, run [the project lists migration](supabase/migrations/202611140001_project_lists.sql) in the same Supabase database. Existing Hayola workspaces already have the initial schema and only need this new migration. Project owners can then add and reorder lists. Project members can move tasks between those lists.
+
 Existing Supabase Auth users created before this migration do not automatically get a profile. Prefer running this migration before the first signup; for an existing project, have its administrator explicitly migrate existing users before using this app.
 
 In Authentication settings:
